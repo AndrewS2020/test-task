@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../domain/level_range.dart';
 import 'widgets/level_slider_track_shape.dart';
+import 'widgets/drum_wheel.dart';
 
 enum _NumpadTarget { minutes, seconds }
 enum _InputMethod { numpad, drum }
@@ -96,8 +97,6 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
   void _onDigitTap(_NumpadTarget target) {
     if (_inputMethod == _InputMethod.numpad) {
       _showNumpad(target);
-    } else {
-      _showDrumPicker();
     }
   }
 
@@ -271,153 +270,6 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
     );
   }
 
-  void _showDrumPicker() {
-    int drumMinutes = _minutes;
-    int drumSeconds = _seconds;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1E1E2E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return SizedBox(
-              height: 300,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 24, bottom: 32),
-                child: Column(
-                  children: [
-                    Text(
-                      'SET TIME',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12, letterSpacing: 1),
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 100,
-                            child: _buildWheel(
-                              value: drumMinutes,
-                              min: 0,
-                              max: 60,
-                              label: 'min',
-                              onChanged: (v) {
-                                drumMinutes = v;
-                                setSheetState(() {});
-                              },
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              ':',
-                              style: TextStyle(
-                                fontSize: 40,
-                                fontWeight: FontWeight.w300,
-                                color: Colors.white54,
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            width: 100,
-                            child: _buildWheel(
-                              value: drumSeconds,
-                              min: 0,
-                              max: 60,
-                              label: 'sec',
-                              onChanged: (v) {
-                                drumSeconds = v;
-                                setSheetState(() {});
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: 200,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _minutes = drumMinutes;
-                            _seconds = drumSeconds;
-                          });
-                          _updateFromTime();
-                          Navigator.pop(ctx);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: levelColor,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
-                        ),
-                        child: const Text('Done', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildWheel({
-    required int value,
-    required int min,
-    required int max,
-    required String label,
-    required ValueChanged<int> onChanged,
-  }) {
-    final items = List.generate(max - min + 1, (i) => min + i);
-
-    return Column(
-      children: [
-        Expanded(
-          child: ListWheelScrollView.useDelegate(
-            itemExtent: 44,
-            diameterRatio: 2.5,
-            squeeze: 1.2,
-            offAxisFraction: 0,
-            useMagnifier: false,
-            perspective: 0.006,
-            controller: FixedExtentScrollController(initialItem: value - min),
-            onSelectedItemChanged: (i) => onChanged(items[i]),
-            childDelegate: ListWheelChildBuilderDelegate(
-              builder: (context, index) {
-                final item = items[index];
-                final isSelected = item == value;
-                return Center(
-                  child: Text(
-                    item.toString().padLeft(2, '0'),
-                    style: TextStyle(
-                      fontSize: isSelected ? 36 : 24,
-                      fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
-                      color: isSelected ? Colors.white : Colors.white30,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(color: Colors.grey[500], fontSize: 11, letterSpacing: 1),
-        ),
-      ],
-    );
-  }
-
   Future<void> _submitPace() async {
     final totalSeconds = (_minutes * 60) + _seconds;
 
@@ -486,46 +338,97 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
   Widget _buildTimeDisplay() {
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 32),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E2E),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildDigitColumn(
-                'MIN',
-                _minutes,
-                _incrementMinutes,
-                _decrementMinutes,
-                () => _onDigitTap(_NumpadTarget.minutes),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  ':',
-                  style: TextStyle(
-                    fontSize: 56,
-                    fontWeight: FontWeight.w300,
-                    color: Colors.white54,
-                  ),
-                ),
-              ),
-              _buildDigitColumn(
-                'SEC',
-                _seconds,
-                _incrementSeconds,
-                _decrementSeconds,
-                () => _onDigitTap(_NumpadTarget.seconds),
-              ),
-            ],
-          ),
-        ),
+        if (_inputMethod == _InputMethod.drum)
+          _buildDrumDisplay()
+        else
+          _buildNumpadDisplay(),
         const SizedBox(height: 12),
         _buildInputMethodToggle(),
       ],
+    );
+  }
+
+  Widget _buildDrumDisplay() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E2E),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          DrumWheel(
+            value: _minutes,
+            min: 0,
+            max: 60,
+            onChanged: (v) {
+              setState(() => _minutes = v);
+              _updateFromTime();
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              ':',
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w300,
+                color: Colors.white54,
+              ),
+            ),
+          ),
+          DrumWheel(
+            value: _seconds,
+            min: 0,
+            max: 60,
+            onChanged: (v) {
+              setState(() => _seconds = v);
+              _updateFromTime();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNumpadDisplay() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 32),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E2E),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildDigitColumn(
+            'MIN',
+            _minutes,
+            _incrementMinutes,
+            _decrementMinutes,
+            () => _onDigitTap(_NumpadTarget.minutes),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              ':',
+              style: TextStyle(
+                fontSize: 56,
+                fontWeight: FontWeight.w300,
+                color: Colors.white54,
+              ),
+            ),
+          ),
+          _buildDigitColumn(
+            'SEC',
+            _seconds,
+            _incrementSeconds,
+            _decrementSeconds,
+            () => _onDigitTap(_NumpadTarget.seconds),
+          ),
+        ],
+      ),
     );
   }
 
