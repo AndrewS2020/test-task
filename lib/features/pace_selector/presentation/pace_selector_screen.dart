@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+enum _NumpadTarget { minutes, seconds }
+
 class PaceSelectorScreen extends StatefulWidget {
   const PaceSelectorScreen({super.key});
 
@@ -14,13 +16,6 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
   int _seconds = 30;
   double _sliderValue = 90.0;
   bool _isLoading = false;
-  bool _editingMinutes = false;
-  bool _editingSeconds = false;
-
-  final _minutesController = TextEditingController();
-  final _secondsController = TextEditingController();
-  final _minutesFocus = FocusNode();
-  final _secondsFocus = FocusNode();
 
   static const Map<String, _LevelRange> _levelRanges = {
     'Elite': _LevelRange(0, 59),
@@ -94,66 +89,174 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
     }
   }
 
-  void _startEditingMinutes() {
-    _minutesController.text = _minutes.toString();
-    setState(() => _editingMinutes = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _minutesFocus.requestFocus());
+  void _showNumpad(_NumpadTarget target) {
+    String buffer = '';
+    int? initialValue = target == _NumpadTarget.minutes ? _minutes : _seconds;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E2E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                left: 24,
+                right: 24,
+                top: 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    target == _NumpadTarget.minutes ? 'MINUTES' : 'SECONDS',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12, letterSpacing: 1),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    buffer.isEmpty ? initialValue.toString().padLeft(2, '0') : buffer,
+                    style: const TextStyle(
+                      fontSize: 56,
+                      fontWeight: FontWeight.w200,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _buildNumpadGrid(
+                    buffer: buffer,
+                    onDigit: (d) {
+                      final maxLen = target == _NumpadTarget.minutes ? 2 : 2;
+                      if (buffer.length < maxLen) {
+                        buffer += d;
+                        setSheetState(() {});
+                      }
+                    },
+                    onBackspace: () {
+                      if (buffer.isNotEmpty) {
+                        buffer = buffer.substring(0, buffer.length - 1);
+                        setSheetState(() {});
+                      }
+                    },
+                    onOk: () {
+                      int value;
+                      if (buffer.isEmpty) {
+                        value = initialValue;
+                      } else {
+                        value = int.tryParse(buffer) ?? initialValue;
+                      }
+                      if (value >= 0 && value <= 60) {
+                        setState(() {
+                          if (target == _NumpadTarget.minutes) {
+                            _minutes = value;
+                          } else {
+                            _seconds = value;
+                          }
+                        });
+                        _updateFromTime();
+                      }
+                      Navigator.pop(ctx);
+                    },
+                    onCancel: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
-  void _finishEditingMinutes() {
-    final value = int.tryParse(_minutesController.text);
-    if (value != null && value >= 0 && value <= 60) {
-      setState(() {
-        _minutes = value;
-        _editingMinutes = false;
-      });
-      _updateFromTime();
-    } else {
-      setState(() => _editingMinutes = false);
-    }
+  Widget _buildNumpadGrid({
+    required String buffer,
+    required void Function(String) onDigit,
+    required VoidCallback onBackspace,
+    required VoidCallback onOk,
+    required VoidCallback onCancel,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final row in [
+          ['1', '2', '3'],
+          ['4', '5', '6'],
+          ['7', '8', '9'],
+        ])
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: row.map((d) => Expanded(child: _numpadButton(d, () => onDigit(d)))).toList(),
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(child: _numpadButton('⌫', onBackspace)),
+            const SizedBox(width: 12),
+            Expanded(child: _numpadButton('0', () => onDigit('0'))),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SizedBox(
+                height: 60,
+                child: ElevatedButton(
+                  onPressed: onOk,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: levelColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                    padding: EdgeInsets.zero,
+                  ),
+                  child: const Icon(Icons.check, size: 28),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: TextButton(
+            onPressed: onCancel,
+            style: TextButton.styleFrom(foregroundColor: Colors.grey[500]),
+            child: const Text('Cancel', style: TextStyle(fontSize: 15)),
+          ),
+        ),
+      ],
+    );
   }
 
-  void _startEditingSeconds() {
-    _secondsController.text = _seconds.toString().padLeft(2, '0');
-    setState(() => _editingSeconds = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _secondsFocus.requestFocus());
-  }
-
-  void _finishEditingSeconds() {
-    final value = int.tryParse(_secondsController.text);
-    if (value != null && value >= 0 && value <= 60) {
-      setState(() {
-        _seconds = value;
-        _editingSeconds = false;
-      });
-      _updateFromTime();
-    } else {
-      setState(() => _editingSeconds = false);
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _minutesFocus.addListener(() {
-      if (!_minutesFocus.hasFocus && _editingMinutes) {
-        _finishEditingMinutes();
-      }
-    });
-    _secondsFocus.addListener(() {
-      if (!_secondsFocus.hasFocus && _editingSeconds) {
-        _finishEditingSeconds();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _minutesController.dispose();
-    _secondsController.dispose();
-    _minutesFocus.dispose();
-    _secondsFocus.dispose();
-    super.dispose();
+  Widget _numpadButton(String label, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: SizedBox(
+        height: 60,
+        child: Material(
+          color: Colors.white10,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onTap,
+            child: Center(
+              child: label == '⌫'
+                  ? const Icon(Icons.backspace_outlined, color: Colors.white70, size: 24)
+                  : Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.white,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _submitPace() async {
@@ -236,11 +339,7 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
             _minutes,
             _incrementMinutes,
             _decrementMinutes,
-            _editingMinutes,
-            _minutesController,
-            _minutesFocus,
-            _startEditingMinutes,
-            _finishEditingMinutes,
+            () => _showNumpad(_NumpadTarget.minutes),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12),
@@ -258,11 +357,7 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
             _seconds,
             _incrementSeconds,
             _decrementSeconds,
-            _editingSeconds,
-            _secondsController,
-            _secondsFocus,
-            _startEditingSeconds,
-            _finishEditingSeconds,
+            () => _showNumpad(_NumpadTarget.seconds),
           ),
         ],
       ),
@@ -274,11 +369,7 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
     int value,
     VoidCallback onIncrement,
     VoidCallback onDecrement,
-    bool isEditing,
-    TextEditingController controller,
-    FocusNode focusNode,
-    VoidCallback onStartEdit,
-    VoidCallback onFinishEdit,
+    VoidCallback onTap,
   ) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -295,44 +386,20 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
           splashRadius: 20,
         ),
         GestureDetector(
-          onTap: isEditing ? null : onStartEdit,
+          onTap: onTap,
           child: SizedBox(
             height: 64,
             width: 80,
             child: Align(
               alignment: Alignment.center,
-              child: isEditing
-                  ? SizedBox(
-                      width: 70,
-                      child: TextField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.center,
-                        showCursor: false,
-                        style: const TextStyle(
-                          fontSize: 56,
-                          fontWeight: FontWeight.w200,
-                          color: Color(0xFF42A5F5),
-                        ),
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        onSubmitted: (_) => onFinishEdit(),
-                      ),
-                    )
-                  : Text(
-                      value.toString().padLeft(2, '0'),
-                      style: const TextStyle(
-                        fontSize: 56,
-                        fontWeight: FontWeight.w200,
-                        color: Colors.white,
-                      ),
-                    ),
+              child: Text(
+                value.toString().padLeft(2, '0'),
+                style: const TextStyle(
+                  fontSize: 56,
+                  fontWeight: FontWeight.w200,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
         ),
