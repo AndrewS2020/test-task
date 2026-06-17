@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../domain/level_range.dart';
+import 'widgets/level_slider_track_shape.dart';
 
 enum _NumpadTarget { minutes, seconds }
+enum _InputMethod { numpad, drum }
 
 class PaceSelectorScreen extends StatefulWidget {
   const PaceSelectorScreen({super.key});
@@ -16,12 +19,13 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
   int _seconds = 30;
   double _sliderValue = 90.0;
   bool _isLoading = false;
+  _InputMethod _inputMethod = _InputMethod.drum;
 
-  static const Map<String, _LevelRange> _levelRanges = {
-    'Elite': _LevelRange(0, 59),
-    'Advanced': _LevelRange(60, 89),
-    'Intermediate': _LevelRange(90, 119),
-    'Beginner': _LevelRange(120, 600),
+  static const Map<String, LevelRange> _levelRanges = {
+    'Elite': LevelRange(0, 59),
+    'Advanced': LevelRange(60, 89),
+    'Intermediate': LevelRange(90, 119),
+    'Beginner': LevelRange(120, 600),
   };
 
   String get swimmerLevel {
@@ -86,6 +90,14 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
     if (_seconds > 0) {
       setState(() => _seconds--);
       _updateFromTime();
+    }
+  }
+
+  void _onDigitTap(_NumpadTarget target) {
+    if (_inputMethod == _InputMethod.numpad) {
+      _showNumpad(target);
+    } else {
+      _showDrumPicker();
     }
   }
 
@@ -259,6 +271,153 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
     );
   }
 
+  void _showDrumPicker() {
+    int drumMinutes = _minutes;
+    int drumSeconds = _seconds;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E2E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SizedBox(
+              height: 300,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 24, bottom: 32),
+                child: Column(
+                  children: [
+                    Text(
+                      'SET TIME',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12, letterSpacing: 1),
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 100,
+                            child: _buildWheel(
+                              value: drumMinutes,
+                              min: 0,
+                              max: 60,
+                              label: 'min',
+                              onChanged: (v) {
+                                drumMinutes = v;
+                                setSheetState(() {});
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              ':',
+                              style: TextStyle(
+                                fontSize: 40,
+                                fontWeight: FontWeight.w300,
+                                color: Colors.white54,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 100,
+                            child: _buildWheel(
+                              value: drumSeconds,
+                              min: 0,
+                              max: 60,
+                              label: 'sec',
+                              onChanged: (v) {
+                                drumSeconds = v;
+                                setSheetState(() {});
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: 200,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _minutes = drumMinutes;
+                            _seconds = drumSeconds;
+                          });
+                          _updateFromTime();
+                          Navigator.pop(ctx);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: levelColor,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          elevation: 0,
+                        ),
+                        child: const Text('Done', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildWheel({
+    required int value,
+    required int min,
+    required int max,
+    required String label,
+    required ValueChanged<int> onChanged,
+  }) {
+    final items = List.generate(max - min + 1, (i) => min + i);
+
+    return Column(
+      children: [
+        Expanded(
+          child: ListWheelScrollView.useDelegate(
+            itemExtent: 44,
+            diameterRatio: 2.5,
+            squeeze: 1.2,
+            offAxisFraction: 0,
+            useMagnifier: false,
+            perspective: 0.006,
+            controller: FixedExtentScrollController(initialItem: value - min),
+            onSelectedItemChanged: (i) => onChanged(items[i]),
+            childDelegate: ListWheelChildBuilderDelegate(
+              builder: (context, index) {
+                final item = items[index];
+                final isSelected = item == value;
+                return Center(
+                  child: Text(
+                    item.toString().padLeft(2, '0'),
+                    style: TextStyle(
+                      fontSize: isSelected ? 36 : 24,
+                      fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                      color: isSelected ? Colors.white : Colors.white30,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(color: Colors.grey[500], fontSize: 11, letterSpacing: 1),
+        ),
+      ],
+    );
+  }
+
   Future<void> _submitPace() async {
     final totalSeconds = (_minutes * 60) + _seconds;
 
@@ -325,41 +484,95 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
   }
 
   Widget _buildTimeDisplay() {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 32),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E2E),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildDigitColumn(
+                'MIN',
+                _minutes,
+                _incrementMinutes,
+                _decrementMinutes,
+                () => _onDigitTap(_NumpadTarget.minutes),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  ':',
+                  style: TextStyle(
+                    fontSize: 56,
+                    fontWeight: FontWeight.w300,
+                    color: Colors.white54,
+                  ),
+                ),
+              ),
+              _buildDigitColumn(
+                'SEC',
+                _seconds,
+                _incrementSeconds,
+                _decrementSeconds,
+                () => _onDigitTap(_NumpadTarget.seconds),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildInputMethodToggle(),
+      ],
+    );
+  }
+
+  Widget _buildInputMethodToggle() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E2E),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _buildDigitColumn(
-            'MIN',
-            _minutes,
-            _incrementMinutes,
-            _decrementMinutes,
-            () => _showNumpad(_NumpadTarget.minutes),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              ':',
+          _toggleChip(_InputMethod.drum, Icons.view_carousel_outlined, 'Drum'),
+          const SizedBox(width: 4),
+          _toggleChip(_InputMethod.numpad, Icons.grid_4x4_outlined, 'Numpad'),
+        ],
+      ),
+    );
+  }
+
+  Widget _toggleChip(_InputMethod method, IconData icon, String label) {
+    final selected = _inputMethod == method;
+    return GestureDetector(
+      onTap: () => setState(() => _inputMethod = method),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF42A5F5) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: selected ? Colors.white : Colors.grey[500]),
+            const SizedBox(width: 6),
+            Text(
+              label,
               style: TextStyle(
-                fontSize: 56,
-                fontWeight: FontWeight.w300,
-                color: Colors.white54,
+                fontSize: 13,
+                color: selected ? Colors.white : Colors.grey[500],
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
-          ),
-          _buildDigitColumn(
-            'SEC',
-            _seconds,
-            _incrementSeconds,
-            _decrementSeconds,
-            () => _showNumpad(_NumpadTarget.seconds),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -426,7 +639,7 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
         const SizedBox(height: 8),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            trackShape: const _LevelSliderTrackShape(),
+            trackShape: const LevelSliderTrackShape(),
             activeTrackColor: Colors.white,
             inactiveTrackColor: Colors.transparent,
             thumbColor: levelColor,
@@ -597,111 +810,4 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
         return Icons.trending_down;
     }
   }
-}
-
-class _LevelRange {
-  final int min;
-  final int max;
-  const _LevelRange(this.min, this.max);
-}
-
-class _LevelSliderTrackShape extends SliderTrackShape {
-  const _LevelSliderTrackShape();
-
-  @override
-  Rect getPreferredRect({
-    required RenderBox parentBox,
-    Offset offset = Offset.zero,
-    required SliderThemeData sliderTheme,
-    bool? isEnabled,
-    bool? isDiscrete,
-  }) {
-    final trackHeight = sliderTheme.trackHeight ?? 4;
-    return Rect.fromLTWH(
-      offset.dx,
-      (parentBox.size.height - trackHeight) / 2,
-      parentBox.size.width - 2 * offset.dx,
-      trackHeight,
-    );
-  }
-
-  @override
-  void paint(
-    PaintingContext context,
-    Offset offset, {
-    required RenderBox parentBox,
-    required SliderThemeData sliderTheme,
-    required Animation<double> enableAnimation,
-    required TextDirection textDirection,
-    required Offset thumbCenter,
-    Offset? secondaryOffset,
-    bool isDiscrete = false,
-    bool isEnabled = true,
-  }) {
-    final trackHeight = sliderTheme.trackHeight ?? 4;
-    final trackRect = Rect.fromLTWH(
-      offset.dx,
-      (parentBox.size.height - trackHeight) / 2,
-      parentBox.size.width - 2 * offset.dx,
-      trackHeight,
-    );
-
-    if (trackRect.width <= 0 || trackRect.height <= 0) return;
-
-    final canvas = context.canvas;
-    const double min = 30;
-    const double max = 300;
-    const double range = max - min;
-
-    double valueToX(double v) {
-      return trackRect.left + ((v - min) / range) * trackRect.width;
-    }
-
-    const segments = <_LevelSegment>[
-      _LevelSegment(30, 59, Color(0xFFFFD700)),
-      _LevelSegment(60, 89, Color(0xFF00E676)),
-      _LevelSegment(90, 119, Color(0xFF42A5F5)),
-      _LevelSegment(120, 300, Colors.grey),
-    ];
-
-    for (final seg in segments) {
-      final segMin = seg.start.clamp(min, max);
-      final segMax = seg.end.clamp(min, max);
-      if (segMin >= segMax) continue;
-
-      final left = valueToX(segMin);
-      final right = valueToX(segMax);
-
-      if (left < thumbCenter.dx) {
-        final activeLeft = left;
-        final activeRight = right < thumbCenter.dx ? right : thumbCenter.dx;
-        if (activeRight > activeLeft) {
-          final rrect = RRect.fromRectAndRadius(
-            Rect.fromLTRB(activeLeft, trackRect.top, activeRight, trackRect.bottom),
-            const Radius.circular(4),
-          );
-          canvas.drawRRect(rrect, Paint()..color = seg.color);
-        }
-      }
-
-      if (right > thumbCenter.dx) {
-        final inactiveLeft = left > thumbCenter.dx ? left : thumbCenter.dx;
-        final inactiveRight = right;
-        if (inactiveRight > inactiveLeft) {
-          final rrect = RRect.fromRectAndRadius(
-            Rect.fromLTRB(inactiveLeft, trackRect.top, inactiveRight, trackRect.bottom),
-            const Radius.circular(4),
-          );
-          canvas.drawRRect(rrect, Paint()..color = seg.color.withValues(alpha: 0.2));
-        }
-      }
-    }
-  }
-}
-
-class _LevelSegment {
-  final double start;
-  final double end;
-  final Color color;
-  const _LevelSegment(this.start, this.end, this.color);
 }
