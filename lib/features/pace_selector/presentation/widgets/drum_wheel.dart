@@ -6,13 +6,7 @@ class DrumWheel extends StatefulWidget {
   final int max;
   final ValueChanged<int> onChanged;
 
-  const DrumWheel({
-    super.key,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-  });
+  const DrumWheel({super.key, required this.value, required this.min, required this.max, required this.onChanged});
 
   @override
   State<DrumWheel> createState() => _DrumWheelState();
@@ -36,11 +30,7 @@ class _DrumWheelState extends State<DrumWheel> {
     if (widget.value != oldWidget.value && !_internalChange) {
       final targetIndex = widget.value - widget.min;
       if (targetIndex >= 0 && targetIndex < _items.length) {
-        _controller.animateToItem(
-          targetIndex,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-        );
+        _controller.animateToItem(targetIndex, duration: const Duration(milliseconds: 200), curve: Curves.easeOutCubic);
       }
     }
     _internalChange = false;
@@ -69,6 +59,7 @@ class _DrumWheelState extends State<DrumWheel> {
               useMagnifier: false,
               perspective: 0.005,
               controller: _controller,
+              physics: const FixedExtentScrollPhysics(),
               onSelectedItemChanged: (i) {
                 if (i >= 0 && i < _items.length) {
                   _internalChange = true;
@@ -80,16 +71,19 @@ class _DrumWheelState extends State<DrumWheel> {
                 builder: (context, index) {
                   final item = _items[index];
                   final isSelected = item == widget.value;
-                  return Container(
-                    alignment: Alignment.center,
-                    child: AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 150),
-                      style: TextStyle(
-                        fontSize: isSelected ? 38 : 22,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w300,
-                        color: isSelected ? Colors.white : Colors.white38,
+                  return SizedBox(
+                    height: 56,
+                    child: Center(
+                      child: AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 150),
+                        style: TextStyle(
+                          fontSize: isSelected ? 38 : 22,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w300,
+                          color: isSelected ? Colors.white : Colors.white38,
+                          height: 1.0,
+                        ),
+                        child: Text(item.toString().padLeft(2, '0'), textAlign: TextAlign.center),
                       ),
-                      child: Text(item.toString().padLeft(2, '0')),
                     ),
                   );
                 },
@@ -104,7 +98,7 @@ class _DrumWheelState extends State<DrumWheel> {
                   bottom: BorderSide(color: Colors.white.withValues(alpha: 0.12), width: 1),
                 ),
               ),
-              margin: EdgeInsets.only(top: 55, bottom: 55),
+              margin: const EdgeInsets.only(top: 56, bottom: 56),
             ),
           ),
         ],
