@@ -57,9 +57,6 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
       _sliderValue = value;
       _minutes = (value / 60).floor();
       _seconds = (value % 60).round();
-      if (_seconds > 59) {
-        _seconds = 59;
-      }
     });
   }
 
@@ -70,7 +67,7 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
   }
 
   void _incrementMinutes() {
-    if (_minutes < 10) {
+    if (_minutes < 60) {
       setState(() => _minutes++);
       _updateFromTime();
     }
@@ -84,14 +81,8 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
   }
 
   void _incrementSeconds() {
-    if (_minutes < 10 || _seconds < 59) {
-      setState(() {
-        _seconds++;
-        if (_seconds == 60) {
-          _seconds = 0;
-          _minutes++;
-        }
-      });
+    if (_seconds < 60) {
+      setState(() => _seconds++);
       _updateFromTime();
     }
   }
@@ -99,12 +90,6 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
   void _decrementSeconds() {
     if (_seconds > 0) {
       setState(() => _seconds--);
-      _updateFromTime();
-    } else if (_minutes > 0) {
-      setState(() {
-        _minutes--;
-        _seconds = 59;
-      });
       _updateFromTime();
     }
   }
@@ -117,7 +102,7 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
 
   void _finishEditingMinutes() {
     final value = int.tryParse(_minutesController.text);
-    if (value != null && value >= 0 && value <= 10) {
+    if (value != null && value >= 0 && value <= 60) {
       setState(() {
         _minutes = value;
         _editingMinutes = false;
@@ -136,7 +121,7 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
 
   void _finishEditingSeconds() {
     final value = int.tryParse(_secondsController.text);
-    if (value != null && value >= 0 && value <= 59) {
+    if (value != null && value >= 0 && value <= 60) {
       setState(() {
         _seconds = value;
         _editingSeconds = false;
@@ -324,21 +309,16 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
                         focusNode: focusNode,
                         keyboardType: TextInputType.number,
                         textAlign: TextAlign.center,
+                        showCursor: false,
                         style: const TextStyle(
                           fontSize: 56,
                           fontWeight: FontWeight.w200,
                           color: Color(0xFF42A5F5),
                         ),
                         decoration: const InputDecoration(
-                          border: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Color(0xFF42A5F5)),
-                          ),
-                          enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Color(0xFF42A5F5)),
-                          ),
-                          focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Color(0xFF42A5F5), width: 2),
-                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
                           isDense: true,
                           contentPadding: EdgeInsets.zero,
                         ),
@@ -518,9 +498,9 @@ class _PaceSelectorScreenState extends State<PaceSelectorScreen> {
             child: ElevatedButton(
               onPressed: _isLoading ? null : _submitPace,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF42A5F5),
+                backgroundColor: color,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: const Color(0xFF42A5F5).withValues(alpha: 0.3),
+                disabledBackgroundColor: color.withValues(alpha: 0.3),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
